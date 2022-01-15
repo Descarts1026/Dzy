@@ -9,47 +9,15 @@ import matplotlib.pyplot as plt
 
 from torchvision import transforms
 from network_files import FasterRCNN, FastRCNNPredictor, AnchorsGenerator
-from backbone import vgg
+from backbone.resnet50_fpn_model import resnet50_fpn_backbone
 from draw_box_utils import draw_box
 import glob
 
+
 def create_model(num_classes):
-    # mobileNetv2+faster_RCNN
-    # backbone = MobileNetV2().features
-    # backbone.out_channels = 1280
-    #
-    # anchor_generator = AnchorsGenerator(sizes=((32, 64, 128, 256, 512),),
-    #                                     aspect_ratios=((0.5, 1.0, 2.0),))
-    #
-    # roi_pooler = torchvision.ops.MultiScaleRoIAlign(featmap_names=['0'],
-    #                                                 output_size=[7, 7],
-    #                                                 sampling_ratio=2)
-    #
-    # model = FasterRCNN(backbone=backbone,
-    #                    num_classes=num_classes,
-    #                    rpn_anchor_generator=anchor_generator,
-    #                    box_roi_pool=roi_pooler)
-
-    vgg_feature = vgg(model_name="vgg16", weights_path="./pretrained/backbone/vgg16.pth").features
-    backbone = torch.nn.Sequential(*list(vgg_feature._modules.values())[:-1])  # 删除features中最后一个Maxpool层
-    backbone.out_channels = 512
-
-    anchor_generator = AnchorsGenerator(sizes=((32, 64, 128, 256, 512),),
-                                        aspect_ratios=((0.5, 1.0, 2.0),))
-
-    roi_pooler = torchvision.ops.MultiScaleRoIAlign(featmap_names=['0'],  # 在哪些特征层上进行roi pooling
-                                                    output_size=[7, 7],  # roi_pooling输出特征矩阵尺寸
-                                                    sampling_ratio=2)  # 采样率
-
-    model = FasterRCNN(backbone=backbone,
-                       num_classes=num_classes + 1,
-                       rpn_anchor_generator=anchor_generator,
-                       box_roi_pool=roi_pooler)
-
-
     # resNet50+fpn+faster_RCNN
-    # backbone = resnet50_fpn_backbone(norm_layer=torch.nn.BatchNorm2d)
-    # model = FasterRCNN(backbone=backbone, num_classes=num_classes, rpn_score_thresh=0.5)
+    backbone = resnet50_fpn_backbone(norm_layer=torch.nn.BatchNorm2d)
+    model = FasterRCNN(backbone=backbone, num_classes=num_classes, rpn_score_thresh=0.3)
 
     return model
 
@@ -65,10 +33,10 @@ def main():
     print("using {} device.".format(device))
 
     # create model
-    model = create_model(num_classes=11)#n
+    model = create_model(num_classes=6)  # n+1 (renet)
 
     # load train weights
-    train_weights = "./save_weights/vgg-model-100.pth"
+    train_weights = "./save_weights/resNetFpn-model-29.pth"
     assert os.path.exists(train_weights), "{} file dose not exist.".format(train_weights)
     model.load_state_dict(torch.load(train_weights, map_location=device)["model"])
     model.to(device)
@@ -79,7 +47,7 @@ def main():
     json_file = open(label_json_path, 'r')
     class_dict = json.load(json_file)
     category_index = {v: k for k, v in class_dict.items()}
-    for file in glob.glob("./data/*.jpeg") :
+    for file in glob.glob("./data/*.jpg"):
         img_name = file.split("\\")[-1]
         # load image
         original_img = Image.open(file)
@@ -116,10 +84,10 @@ def main():
                      category_index,
                      thresh=0.5,
                      line_thickness=3)
-            plt.imshow(original_img)
-            plt.show()
+            #plt.imshow(original_img)
+            #plt.show()
             # 保存预测的图片结果
-            original_img.save("./data_out/"+img_name)
+            original_img.save("./data_out/" + img_name)
 
 
 if __name__ == '__main__':
